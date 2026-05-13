@@ -1,4 +1,4 @@
-LLVM 10 Tutorial
+LLVM 21 Tutorial
 ================
 
 
@@ -8,7 +8,7 @@ por Alcides Fonseca <http://alcidesfonseca.com>
 LLVM
 ----
 
-O projecto LLVM (Low-Level Virtual Machine) consiste numa colecção de ferramentas para compilação que incluí diversos elementos, nomeadamente um compilador de C/C++ (Clang), um optimizador e um gerador de código. É um projecto Open-Source e recentemente impulsionado pela Apple como base para o XCode e desenvolvimento de apps para Mac e iOS.
+O projecto LLVM (Low-Level Virtual Machine) consiste numa colecção de ferramentas para compilação que incluí diversos elementos, nomeadamente um compilador de C/C++ (Clang), um optimizador e um gerador de código. É um projecto Open-Source e tem sido usado pela Apple como base para o Xcode e desenvolvimento de apps para Mac e iOS, bem como por outros projectos como o Rust, Swift e o Julia.
 
 Estes componentes são unidos por uma linguagem de representação intermédia de código (linguagem LLVM IR). Através desta linguagem intermédia, as ferramentas de optimização e geração de código para várias plataformas e arquitecturas podem ser reutilizadas por compiladores para várias linguagens. Esta ficha foca-se sobre essa linguagem.
 
@@ -18,21 +18,24 @@ Estes componentes são unidos por uma linguagem de representação intermédia d
 Instalar o LLVM
 ----------------------
 
-Em Ubuntu:
+Os exemplos desta ficha foram testados com LLVM 21 (no Ubuntu 26.04 LTS) e com LLVM 22 (no macOS via Homebrew). A sintaxe é idêntica entre as duas versões, pelo que qualquer uma serve.
+
+Em Ubuntu (24.04 LTS ou mais recente):
 
 ```bash
-sudo apt-get install llvm
+sudo apt-get update
+sudo apt-get install llvm clang
 ```
 
 Em MacOS:
 
 ```bash
 brew install llvm
-echo "export PATH=/usr/local/opt/llvm/bin:\$PATH" >> ~/.bashrc
-echo 'export PATH="/usr/local/opt/llvm/bin:$PATH"' >> ~/.zshrc # For Catalina
-source ~/.bashrc
-source ~/.zshrc # Catalina
+echo 'export PATH="/opt/homebrew/opt/llvm/bin:$PATH"' >> ~/.zshrc
+source ~/.zshrc
 ```
+
+(em Macs Intel mais antigos o caminho do Homebrew é `/usr/local/opt/llvm/bin`)
 
 Para verificar que está tudo operacional:
 
@@ -40,20 +43,20 @@ Para verificar que está tudo operacional:
 bash check.sh
 ```
 
-Verificar que estamos a usar a versão certa:
+Verificar a versão instalada:
 
 ```bash
 llc --version
 ```
 
-O resultado deve ser  LLVM version 10.0.0
+O resultado deve indicar LLVM 21 (Ubuntu) ou LLVM 22 (Homebrew). Versões abaixo de LLVM 17 não funcionam com esta ficha, porque a sintaxe dos ponteiros mudou (ver nota mais abaixo sobre *opaque pointers*).
 
 Executar o Hello World
 -----------------
 
-Junto a este documento encontra-se um ficheiro chamado hello.ll. Esse ficheiro contem um exemplo de um Hello World escrito em LLVM. Para o executar directamente, poderá usar o LLVM Interpreter (lli). Para tal basta executar no terminal: `lli hello.ll`. Deverá aparecer "Hello World" no stdout como resultado da execução do código LLVM.
+Junto a este documento encontra-se um ficheiro chamado hello.ll. Esse ficheiro contém um exemplo de um Hello World escrito em LLVM. Para o executar directamente, poderá usar o LLVM Interpreter (lli). Para tal basta executar no terminal: `lli hello.ll`. Deverá aparecer "Hello World!" no stdout como resultado da execução do código LLVM.
 
-Para compilar o código para um ficheiro objecto são necessários dois passos. O primeiro consiste em executar o LLVM Compiler (llc) usando o comando: `llc hello.ll`. Este passo vai gerar um ficheiro assembly hello.s. O segundo passo consiste em usar um compilador como o gcc ou o clang para gerar o executável. Para tal deverá escrever no terminal: `clang -o hello hello.s`. O ficheiro final poderá ser executado correndo `./hello`.
+Para compilar o código para um ficheiro objecto são necessários dois passos. O primeiro consiste em executar o LLVM Compiler (llc) usando o comando: `llc hello.ll`. Este passo vai gerar um ficheiro assembly hello.s. O segundo passo consiste em usar um compilador como o clang ou o gcc para gerar o executável. Para tal deverá escrever no terminal: `clang -o hello hello.s`. O ficheiro final poderá ser executado correndo `./hello`.
 
 
 Um ficheiro vazio
@@ -73,12 +76,12 @@ define i32 @main() {
 Tipos
 -------------
 
-Uma das primeiras coisas que teremos de considerar é o tipo de dados usados. Os inteiros são representados por iX, sendo X o número de bits que o inteiro usa. Por exemplo: i32 e i64 usam 32 e 64 bits cada. Para além de inteiros existem outros tipos primitivos como float (32 bits), double (64 bits). 
+Uma das primeiras coisas que teremos de considerar é o tipo de dados usados. Os inteiros são representados por iX, sendo X o número de bits que o inteiro usa. Por exemplo: i32 e i64 usam 32 e 64 bits cada. Para além de inteiros existem outros tipos primitivos como float (32 bits), double (64 bits).
 
-Tal como em C, podemos também ter ponteiros para tipos primitivos. Como exemplos podemos ter: `i32*` (ponteiro para um inteiro) ou `i32 (i32) *` (ponteiro para uma função que recebe um inteiro e devolve um inteiro).
+Em LLVM 17 ou superior (que inclui o LLVM 21 e 22 usados nesta ficha), todos os tipos de ponteiros são representados de forma uniforme com a palavra-chave `ptr` — os chamados *opaque pointers*. Antigamente existiam ponteiros tipados como `i32*` (ponteiro para um inteiro) ou `i32 (i32)*` (ponteiro para uma função que recebe e devolve um inteiro), mas esses foram removidos da linguagem. Hoje em dia, o tipo do valor apontado é declarado em cada operação que usa o ponteiro (por exemplo, `load i32, ptr %p` ou `getelementptr i32, ptr %arr, i32 0`), e não no próprio tipo do ponteiro.
 
 Podemos ainda ter arrays, úteis para representar um conjunto de dados do mesmo tipo, seguindo a syntax `[ N x <type>]`. Por exemplo `[40 x i32]` é um array de inteiros de tamanho 40.
-  
+
 
 
 Operações sobre tipos nativos
@@ -113,76 +116,76 @@ A solução passa por guardar numa variável LLVM um ponteiro para um espaço na
 
 ```llvm
 %p_a = alloca i64
-````
+```
 
-O operador alocca consegue reservar espaço da memória para uma variável de um determinado tipo. No registo `%p_a` é guardado um ponteiro para esse espaço (`i64*` neste caso).
-
-```llvm
-store i64 3, i64* %p_a
-````
-
-O operador store guarda um valor (3 neste caso) num espaço de memória apontado por um outro valor (`%p_a` neste caso).
+O operador alloca consegue reservar espaço da memória para uma variável de um determinado tipo. No registo `%p_a` é guardado um ponteiro (`ptr`) para esse espaço.
 
 ```llvm
-%b = load i64, i64* %p_a
-````
+store i64 3, ptr %p_a
+```
 
-Load faz o oposto, lê o valor que está nesse espaço de memória e coloca-o na variável `%b`. Esta instrução permite-nos ler o valor em diferentes pontos do programa, existindo a possibilidade dos valores serem diferentes conforme o número de stores que existam pelo meio.
+O operador store guarda um valor (3 neste caso) num espaço de memória apontado por um outro valor (`%p_a` neste caso). Note-se que o tipo do valor (`i64`) é declarado explicitamente em cada store.
+
+```llvm
+%b = load i64, ptr %p_a
+```
+
+Load faz o oposto, lê o valor que está nesse espaço de memória e coloca-o na variável `%b`. Tal como no store, o tipo do valor a ler (`i64`) é declarado explicitamente, e o ponteiro tem tipo `ptr`. Esta instrução permite-nos ler o valor em diferentes pontos do programa, existindo a possibilidade dos valores serem diferentes conforme o número de stores que existam pelo meio.
 
 
 Operações sobre Arrays
 ---------------------------
 
 ```llvm
-define i32 @main() { 
+define i32 @main() {
   %arr = alloca i32, i32 3
   ;
-  %ind0 = getelementptr i32, i32* %arr, i32 0
-  store i32 9, i32* %ind0
+  %ind0 = getelementptr i32, ptr %arr, i32 0
+  store i32 9, ptr %ind0
   ;
-  %ind1 = getelementptr i32, i32* %arr, i32 1
-  store i32 8, i32* %ind1
+  %ind1 = getelementptr i32, ptr %arr, i32 1
+  store i32 8, ptr %ind1
   ;
-  %ind2 = getelementptr i32, i32* %arr, i32 2
-  store i32 7, i32* %ind2
+  %ind2 = getelementptr i32, ptr %arr, i32 2
+  store i32 7, ptr %ind2
   ;
-  %ind1v = load i32, i32* %ind1
+  %ind1v = load i32, ptr %ind1
   ret i32 %ind1v
 }
 ```
 
 Neste exemplo, %arr é um array alocado dinamicamente com o tamanho 3 (apesar da constante 3 poder ser substituída pelo resultado de outra computação com %variavel). A primeira linha trata da alocação do espaço necessário para o array. O operador getelementptr (GEP) vai buscar o endereço de memória onde está guardado o elemento 0 do array %arr. Nas linhas seguintes irá buscar o índice 1 e 2. Em cada store é guardado um número (9, 8 e 7 respectivamente) no endereço de memória respectivo ao indíce.
 
-Finalmente a instrução load vai buscar o valor guardado em memória no índice 1. O load tal como o store actuam em ponteiros de memória, que têm de ser obtidos previamente com o getelementptr.
+Finalmente a instrução load vai buscar o valor guardado em memória no índice 1. O load tal como o store actuam em ponteiros de memória, que têm de ser obtidos previamente com o getelementptr. Em LLVM IR moderno, o tipo do elemento (`i32`) é declarado em cada um destes operadores, já que o ponteiro em si é apenas `ptr`.
 
 Operações sobre Estruturas
 ---------------------------
 
 Uma forma de implementar estruturas e objectos é usando tipos compostos. Para este exemplo vamos considerar um array de Java, que para além de um ponteiro para o array nativo, tem também um campo onde é guardado o número de elementos existentes. Para tal é conveniente declarar no topo do ficheiro um alias para o tipo composto. No caso do exemplo a seguir, declaramos dois tipos, um para arrays de inteiros e outro para arrays de booleans. Em ambos o primeiro campo é um inteiro, onde se guarda o tamanho actual do array.
 
-A estrutura constroí-se através da primeira chamada ao inservalue. A syntax é `insertvalue <type> <input>, <vtype> <value>, <pos>`, o que corresponde a colocar value no campo pos do input. Em Java ou C, seria equivalente a input.pos = value, em que type seria o tipo da estrutura e vtype o tipo do campo. Caso o input seja `undef`, é criado uma nova estrutura em memória. Com chamadas encadeadas, é preenchido o elemento passo a passo, até fichar completo.
+A estrutura constroí-se através da primeira chamada ao insertvalue. A syntax é `insertvalue <type> <input>, <vtype> <value>, <pos>`, o que corresponde a colocar value no campo pos do input. Em Java ou C, seria equivalente a input.pos = value, em que type seria o tipo da estrutura e vtype o tipo do campo. Caso o input seja `undef`, é criado uma nova estrutura em memória. Com chamadas encadeadas, é preenchido o elemento passo a passo, até ficar completo.
 
 ```llvm
-%IntArray = type { i32, i32* }
-%BooleanArray = type { i32, i1* }
+%IntArray = type { i32, ptr }
+%BooleanArray = type { i32, ptr }
 ;
-@a = global %IntArray { i32 0, i32* null} 
+@a = global %IntArray { i32 0, ptr null }
 ;
-define i32 @main() { 
+define i32 @main() {
   %size = add i32 0, 3
   ;
   %arr = alloca i32, i32 %size
   %arr_ins = insertvalue %IntArray undef, i32 %size, 0
-  %arr_ins2 = insertvalue %IntArray %arr_ins, i32* %arr, 1
-  store %IntArray %arr_ins2, %IntArray* @a
+  %arr_ins2 = insertvalue %IntArray %arr_ins, ptr %arr, 1
+  store %IntArray %arr_ins2, ptr @a
   ;
-  %arr_load = load %IntArray, %IntArray* @a
+  %arr_load = load %IntArray, ptr @a
   %length = extractvalue %IntArray %arr_load, 0
   ;
-  %store_load = load %IntArray, %IntArray* @a
+  %store_load = load %IntArray, ptr @a
   %store_arr = extractvalue %IntArray %store_load, 1
-  %ind0 = getelementptr i32, i32* %store_arr, i32 1
-  store i32 9, i32* %ind0
+  %ind0 = getelementptr i32, ptr %store_arr, i32 1
+  store i32 9, ptr %ind0
   ;
   ret i32 0
 }
@@ -206,7 +209,6 @@ define i32 @sum(i32 %a, i32 %b, i32 %c) {
 }
 define i32 @main() {
   %1 = call i32 @sum(i32 1, i32 2, i32 3)
-  call i32 (i32, i32, i32)* @sum(i32 1, i32 2, i32 3) ; alternative call syntax
   ret i32 %1
 }
 ```
@@ -214,8 +216,8 @@ define i32 @main() {
 Em primeiro lugar definimos a função sum, que recebe três inteiros e devolve a soma desses 3 inteiros. Como vimos anteriormente, primeiro temos de somar os dois primeiros valores (guardando em %1), somamos esse resultado intermédio com o último valor e devolvemos a soma total. De notar que os argumentos são declarados com os tipos.
 
 Na função main estamos a invocar essa função com o operador call. A syntax de chamada é ` call <tipo_de retorno> <funcao>(<args>) `. Para os argumentos é também necessário declarar o tipo de cada um destes. Os tipos explícitos ajudam a detectar inconsistências no código.
-  
-Existe uma versão alternativa, onde o retorno da função não é usado, e nesse caso podemos usar o tipo da função (incluindo parâmetros e referência no final) em vez do tipo de retorno.
+
+Para chamadas indirectas (através de um ponteiro para função) ou variádicas, é possível indicar a assinatura completa da função imediatamente antes do nome: `call i32 (i32, i32, i32) @sum(i32 1, i32 2, i32 3)`. Nas versões antigas do LLVM IR (antes da introdução dos *opaque pointers*) este tipo aparecia como `i32 (i32, i32, i32)*` com asterisco — esse asterisco já não é usado.
 
 Operações de Ramos (Branching)
 ------------------------------
@@ -243,10 +245,17 @@ As operações de ramos (como o if, for e while) são mais complexas em LLVM IR.
 
 No ramo then, são somados os dois valores iniciais e no ramo else estes são multiplicados. No final de cada um dos dois ramos é feito um salto (goto) através de um br não condicional para uma label %ifcont. O motivo para tal é que pode apenas existir uma expressão ret numa função.
 
-Na label ifcont é usado o operador phi para ir buscar o valor correcto. Este operador especial permite selecionar um valor através do ramo percorrido pelo programa. É uma forma de permitir usar valores que podem ter sido modificados por um ramo ou outro. 
+Na label ifcont é usado o operador phi para ir buscar o valor correcto. Este operador especial permite selecionar um valor através do ramo percorrido pelo programa. É uma forma de permitir usar valores que podem ter sido modificados por um ramo ou outro.
 
 
 
+
+Nota sobre Opaque Pointers
+---------------------------
+
+A partir do LLVM 15, e definitivamente a partir do LLVM 17, os ponteiros em LLVM IR deixaram de ser tipados — passaram a chamar-se *opaque pointers* e usam o tipo único `ptr`. Os tipos clássicos `i32*`, `i8*`, `%MyStruct*` deixaram de ser aceites pelo parser. Toda a informação de tipo do valor apontado migrou para as instruções (load, store, getelementptr, call, ...), que já a declaravam de forma redundante.
+
+Se encontrar tutoriais antigos com `i32*` ou similares, basta substituir todas as ocorrências por `ptr` para tornar o código compatível com LLVM 17 ou superior.
 
 
 
@@ -267,5 +276,5 @@ Referências
 -------------
 
 * [LLVM Language Reference Manual](http://llvm.org/docs/LangRef.html)
-* [Mapping High-Level Constructs to LLVM IR](http://llvm.lyngvig.org/Articles/Mapping-High-Level-Constructs-to-LLVM-IR)
-* [LLVM Tutorial](http://llvm.org/docs/tutorial/LangImpl5.html)
+* [Opaque Pointers in LLVM](https://llvm.org/docs/OpaquePointers.html)
+* [LLVM Tutorial: Kaleidoscope](https://llvm.org/docs/tutorial/)
