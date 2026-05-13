@@ -1,21 +1,28 @@
-# LLVM
+#!/usr/bin/env bash
+# Verifica que o LLVM (clang, llc, lli) está instalado e funcional.
 
-clang -S -emit-llvm helloworld.c
-llc -o=middle.s helloworld.ll
-(cat middle.s | grep -v macos) > middle_clean.s
-CC -o helloworld middle_clean.s
+set -u
 
-if [ -f "middle.s" ]
-then
-  echo "LLVM installed with success."
+for tool in clang llc lli; do
+  if ! command -v "$tool" >/dev/null 2>&1; then
+    echo "ERRO: $tool não encontrado no PATH. Verifica a instalação do LLVM."
+    exit 1
+  fi
+done
+
+echo "Versão do LLVM:"
+llc --version | head -2
+
+# C -> LLVM IR -> assembly -> binário
+clang -S -emit-llvm helloworld.c -o helloworld.ll
+llc helloworld.ll -o helloworld.s
+clang -o helloworld helloworld.s
+
+if [ -x ./helloworld ]; then
+  echo "LLVM instalado com sucesso."
 else
-  echo "LLVM is not installed!"
-fi
-
-
-if [ $? -ne 0 ]
-then
-    echo "The result of LLVM Hello World code did not succeed to execute."
+  echo "ERRO: falhou a gerar o executável."
+  exit 1
 fi
 
 ./helloworld
